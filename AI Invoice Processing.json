@@ -1,0 +1,759 @@
+{
+  "name": "AI Invoice Processing",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "simple": false,
+        "filters": {
+          "q": "filename:pdf has:attachment"
+        },
+        "options": {
+          "downloadAttachments": true
+        }
+      },
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -144,
+        -336
+      ],
+      "id": "81c63600-a0fd-4152-b00f-ad561dbc214d",
+      "name": "Gmail Trigger"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "7ef3261c-3cac-4f2f-a9f1-57d79183a85d",
+              "name": "attachments",
+              "value": "={{ $('Gmail Trigger').item.binary.keys() }}",
+              "type": "array"
+            },
+            {
+              "id": "6b9075da-0725-41e9-ba85-c9b5ed12ee3a",
+              "name": "message_id",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        80,
+        -480
+      ],
+      "id": "69136732-cbba-4f2e-8b04-d487879229d8",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "attachments",
+        "include": "allOtherFields",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        240,
+        -480
+      ],
+      "id": "9ab7ca9d-8262-4df2-9280-3ad463a3cb6f",
+      "name": "Split Out"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "advanced": true,
+        "mergeByFields": {
+          "values": [
+            {
+              "field1": "message_id",
+              "field2": "id"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        464,
+        -352
+      ],
+      "id": "4a07feff-8518-410c-a967-1f41e2752550",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "inputDataFieldName": "={{ $json.attachments }}",
+        "name": "={{ $('Gmail Trigger').item.json.headers.subject }}_{{ $json.attachments }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "19bVVeXXC5b9DmwCH9eFiNKPityeoOiKY",
+          "mode": "list",
+          "cachedResultName": "Invoices From Gmail",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/19bVVeXXC5b9DmwCH9eFiNKPityeoOiKY"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        672,
+        -352
+      ],
+      "id": "32be4fba-ab10-454c-9ebb-ebde3b673eb5",
+      "name": "Upload file"
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $json.id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        864,
+        -352
+      ],
+      "id": "4cbed127-99eb-46f8-a56c-bf9254e54d2e",
+      "name": "Download file"
+    },
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "=data",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        1072,
+        -352
+      ],
+      "id": "ea25e949-3e97-4f96-8e44-ff390f3a3a3e",
+      "name": "Extract from File",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Task Overview\nYou’ll receive raw text extracted from PDF invoices. Your job is to identify the key details listed below and return them in a structured JSON object.\n\nInformation to Capture\n\ninvoice_name – the identifier or title of the invoice\n\ncompany_name – the name of the business that issued the invoice\n\ntotal_invoice_amount – the grand total shown on the invoice\n\nline_items – an array where each entry includes:\n• description – the item or service label\n• amount – the cost for that item\n\nOutput Format (example)\n{\n  \"invoice_name\": \"Invoice ABC-123\",\n  \"company_name\": \"Acme Corp\",\n  \"total_invoice_amount\": 1000,\n  \"line_items\": [\n    { \n      \"description\": \"Consulting services\", \"amount\": 100 \n    },\n    { \n      \"description\": \"Software license\", \"amount\": 800 \n    },\n    { \n      \"description\": \"Sales tax\", \"amount\": 100 \n    }\n  ]\n}\n\nGuidelines\n\nIf any detail is missing or unclear, make your best estimate or use null.\n\nProvide the most specific line-item labels available; use generic placeholders only when no description exists.\n\nVerify that the line-item amounts add up to the total invoice amount (minor rounding differences are acceptable).\n\nInput Placeholder\nText: {{ $json.text }}",
+        "hasOutputParser": true,
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.7,
+      "position": [
+        2896,
+        304
+      ],
+      "id": "7b2004ea-970b-47f6-b58e-e05ccf8c7feb",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        2848,
+        480
+      ],
+      "id": "10b88a1d-4898-4914-97f0-2a4ed485e60d",
+      "name": "OpenAI Chat Model"
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"invoice_name\": \"Invoice ABC-123\",\n  \"company_name\": \"Acme Corp\",\n  \"total_invoice_amount\": 1000,\n  \"line_items\": [\n    { \n      \"description\": \"Consulting services\", \"amount\": 100 \n    },\n    { \n      \"description\": \"Software license\", \"amount\": 800 \n    },\n    { \n      \"description\": \"Sales tax\", \"amount\": 100 \n    }\n  ]\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        3056,
+        480
+      ],
+      "id": "01683e67-ee33-4501-b312-2b52d442b220",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "value": "226ccdb2-3d99-803f-9bca-da423b1441b3",
+          "mode": "list",
+          "cachedResultName": "Invoice Tracking Database",
+          "cachedResultUrl": "https://www.notion.so/226ccdb23d99803f9bcada423b1441b3"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Subject|title",
+              "title": "={{ $('Gmail Trigger').item.json.subject }}"
+            },
+            {
+              "key": "Email|rich_text",
+              "textContent": "={{ $('Gmail Trigger').item.json.from.value[0].address }}"
+            },
+            {
+              "key": "Invoice URL|url",
+              "urlValue": "={{ $('Upload file').item.json.webViewLink }}"
+            },
+            {
+              "key": "Amount|number",
+              "numberValue": "={{ $json.output.total_invoice_amount }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        3248,
+        304
+      ],
+      "id": "0e10860a-047f-405a-abd2-5c36e935a8cf",
+      "name": "Create a database page"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "6b9b30bf-b866-437d-b244-f533b71aef51",
+              "name": "line_items",
+              "value": "={{ $('Basic LLM Chain').item.json.output.line_items }}",
+              "type": "array"
+            },
+            {
+              "id": "1ad359b2-bbd7-4a1f-997e-205054566b98",
+              "name": "subject_id",
+              "value": "={{ $json.id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        3472,
+        304
+      ],
+      "id": "27f6bd58-33b2-4567-ad9b-ef0cfa99627a",
+      "name": "Edit Fields1"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "=line_items",
+        "include": "allOtherFields",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        3696,
+        304
+      ],
+      "id": "8f3b2bb3-8310-494f-9591-d58c0f1cfe66",
+      "name": "Split Out1"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        3312,
+        1328
+      ],
+      "id": "3bd20f80-93ab-4daa-9a52-9054a41da485",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        3568,
+        1264
+      ],
+      "id": "f87be43d-af8b-461d-9cad-37e0d7df47f5",
+      "name": "No Operation, do nothing"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "value": "226ccdb2-3d99-80ff-85c8-ef5279a5d40c",
+          "mode": "list",
+          "cachedResultName": "Invoice Line Items",
+          "cachedResultUrl": "https://www.notion.so/226ccdb23d9980ff85c8ef5279a5d40c"
+        },
+        "simple": false,
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Invoice Subject|title",
+              "title": "={{ $('Gmail Trigger').item.json.subject }}"
+            },
+            {
+              "key": "Invoice Item|rich_text",
+              "textContent": "={{ $json.line_items.description }}"
+            },
+            {
+              "key": "Amount|number",
+              "numberValue": "={{ $json.line_items.amount }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        3568,
+        1456
+      ],
+      "id": "0a0913ab-b524-4a42-b8aa-079c1e7fb51e",
+      "name": "Create a database page1"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        1536,
+        496
+      ],
+      "id": "d31fd292-f833-40dc-8ac4-7a3c7d60d7ca",
+      "name": "OpenAI Chat Model1"
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n\"status\": \"\"\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        1760,
+        496
+      ],
+      "id": "d4bb00ef-241e-4a1a-a8ef-30b3c861ee93",
+      "name": "Structured Output Parser1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "b5cbcaf4-583b-425c-b3e8-02789d87ec20",
+              "leftValue": "={{ $json.output.status }}",
+              "rightValue": "yes",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1872,
+        336
+      ],
+      "id": "cbc1826e-9c4b-4c2a-b950-a6d1f10df09a",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "operation": "deleteFile",
+        "fileId": {
+          "__rl": true,
+          "value": "={{ $('Download file').item.json.id }}",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        2160,
+        528
+      ],
+      "id": "d898ab6d-66a9-4b0f-b767-5064edc013ec",
+      "name": "Delete a file"
+    },
+    {
+      "parameters": {
+        "content": "# Get & Prepare Documents",
+        "height": 700,
+        "width": 1480,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        -672
+      ],
+      "id": "f44cd2e9-c1cb-4414-a9b2-1ec41d94ab84",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "# Check for The Invoice",
+        "height": 700,
+        "width": 1100,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1440,
+        128
+      ],
+      "id": "8678bd9f-2bb5-4cfc-8992-3b17b3ead75c",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "# Extract & Save Information",
+        "height": 700,
+        "width": 1240,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2688,
+        128
+      ],
+      "id": "d2ae6ce6-0730-4e3f-9c7b-c80216e77c23",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "# Save Subitems",
+        "height": 700,
+        "width": 920
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2960,
+        1024
+      ],
+      "id": "75ebff1b-28fe-40cd-b876-76a828f809cb",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Based on the text decide if the text is about an invoice or not: {{ $json.text }}\n\nIf yes return \"yes\", if no return \"no\". Don't provide any additional information. Use only small letters",
+        "hasOutputParser": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 2,
+      "position": [
+        1552,
+        336
+      ],
+      "id": "bedfac22-a82f-4d5f-bd1d-a068f80f70c6",
+      "name": "Invoice Controller"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          },
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Upload file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload file": {
+      "main": [
+        [
+          {
+            "node": "Download file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download file": {
+      "main": [
+        [
+          {
+            "node": "Extract from File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract from File": {
+      "main": [
+        [
+          {
+            "node": "Invoice Controller",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Create a database page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a database page": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {
+            "node": "Split Out1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out1": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [
+          {
+            "node": "No Operation, do nothing",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create a database page1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a database page1": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Invoice Controller",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser1": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Invoice Controller",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Delete a file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Invoice Controller": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "4c575b20-0d4a-477f-acaf-5edbfecee439",
+  "meta": {
+    "instanceId": "71baaac99cc222f2ee5162aef98355c2380654fdbcfc111381308c6fd7b75852"
+  },
+  "id": "fonPYk369XZOVNXc",
+  "tags": []
+}
